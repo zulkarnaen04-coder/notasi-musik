@@ -208,6 +208,12 @@
                     </div>
 
                     <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                        <!-- Indikator Peringatan Curang -->
+                        <div class="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-2xl text-xs font-bold text-rose-700">
+                            <i class="fa-solid fa-triangle-exclamation text-rose-500"></i>
+                            <span>Peringatan: <span id="cheatCountDisplay">0</span>/3</span>
+                        </div>
+
                         <div class="flex items-center gap-2 bg-amber-50 border border-amber-200/80 px-3.5 py-1.5 rounded-2xl">
                             <i class="fa-solid fa-clock text-amber-500 animate-pulse text-xs"></i>
                             <span id="timerDisplay" class="font-fredoka font-bold text-base text-amber-700">00:00</span>
@@ -275,7 +281,7 @@
                         <i class="fa-solid fa-chevron-left"></i> Sebelum
                     </button>
                     <div class="text-xs font-bold text-slate-400 hidden sm:block">
-                        Gunakan tombol panah & A-D
+                        Gunakan tombol navigasi di bawah
                     </div>
                     <button id="nextBtn" onclick="nextQuestion()" class="px-6 py-2.5 rounded-xl font-bold text-xs md:text-sm bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2 shadow-md shadow-indigo-200 transition-all">
                         Selanjutnya <i class="fa-solid fa-chevron-right"></i>
@@ -453,7 +459,7 @@
         ];
 
         /* -------------------------------------------------------------------------- */
-        /* APPLICATION STATE & AUDIO SYNTHESIZER                                      */
+        /* APPLICATION STATE & ANTI-CURANG DETECTOR                                   */
         /* -------------------------------------------------------------------------- */
         let studentName = "";
         let studentClass = "";
@@ -463,6 +469,34 @@
         let timerInterval = null;
         let isAudioMuted = false;
         let audioCtx = null;
+        let cheatCount = 0;
+        let isQuizActive = false;
+
+        // Deteksi Meninggalkan Layar / Pindah Tab
+        document.addEventListener("visibilitychange", function() {
+            if (isQuizActive && document.visibilityState === "hidden") {
+                handleCheatDetected();
+            }
+        });
+
+        window.addEventListener("blur", function() {
+            if (isQuizActive) {
+                handleCheatDetected();
+            }
+        });
+
+        function handleCheatDetected() {
+            if (!isQuizActive) return;
+            cheatCount++;
+            document.getElementById("cheatCountDisplay").innerText = cheatCount;
+
+            if (cheatCount < 3) {
+                alert(`⚠️ PERINGATAN CURANG (${cheatCount}/3)!\n\nKamu terdeteksi membuka tab atau aplikasi lain! Kuis ini harus dikerjakan tanpa berpindah layar.\n\nJika melanggar 3 kali, kuis kamu akan otomatis DIHENTIKAN!`);
+            } else {
+                alert(`🚨 KUIS DIBATALKAN / SELESAI OTOMATIS!\n\nKamu telah melanggar aturan sebanyak 3 kali (membuka tab/aplikasi lain).\n\nHasil jawaban kamu saat ini akan langsung dikirimkan ke guru.`);
+                finishQuiz(true); // Selesaikan kuis dengan status curang
+            }
+        }
 
         function validateIdentityInputs() {
             const nameInput = document.getElementById("studentName").value.trim();
@@ -611,6 +645,10 @@
             document.getElementById("navRestartBtn").classList.remove("hidden");
             document.getElementById("studentDisplayBadge").innerText = `${studentName} (${studentClass})`;
 
+            cheatCount = 0;
+            isQuizActive = true;
+            document.getElementById("cheatCountDisplay").innerText = "0";
+
             startTimer();
             loadQuestion(0);
         }
@@ -643,7 +681,6 @@
             const optionsContainer = document.getElementById("optionsContainer");
             optionsContainer.innerHTML = "";
 
-            const letters = ["A", "B", "C", "D"];
             const isAnswered = userAnswers[index] !== null;
 
             q.options.forEach((opt, idx) => {
@@ -651,17 +688,14 @@
                 btn.disabled = isAnswered;
 
                 let cardStyle = "border-slate-200 bg-white text-slate-700 hover:border-indigo-300";
-                let badgeStyle = "bg-slate-100 text-slate-600";
                 let checkIcon = "";
 
                 if (isAnswered) {
                     if (idx === q.correct) {
                         cardStyle = "border-emerald-500 bg-emerald-50 text-emerald-900 font-bold";
-                        badgeStyle = "bg-emerald-500 text-white";
                         checkIcon = '<i class="fa-solid fa-circle-check text-emerald-500 text-lg"></i>';
                     } else if (idx === userAnswers[index]) {
                         cardStyle = "border-rose-500 bg-rose-50 text-rose-900 font-bold";
-                        badgeStyle = "bg-rose-500 text-white";
                         checkIcon = '<i class="fa-solid fa-circle-xmark text-rose-500 text-lg"></i>';
                     } else {
                         cardStyle = "border-slate-200 bg-slate-50 opacity-60 text-slate-400";
@@ -671,10 +705,10 @@
                 btn.className = `option-card w-full p-4 rounded-2xl text-left border-2 font-semibold flex items-center justify-between gap-3 ${cardStyle}`;
                 btn.onclick = () => selectAnswer(idx);
 
+                // OPSI A, B, C, D DILANGKAHI (DIBUANG) AGAR HANYA MENAMPILKAN TEKS JAWABAN
                 btn.innerHTML = `
                     <div class="flex items-center gap-3">
-                        <span class="w-8 h-8 rounded-xl font-fredoka font-bold text-sm flex items-center justify-center ${badgeStyle}">${letters[idx]}</span>
-                        <span class="text-sm md:text-base">${opt}</span>
+                        <span class="text-sm md:text-base pl-2">${opt}</span>
                     </div>
                     <div>${checkIcon}</div>
                 `;
@@ -728,7 +762,7 @@
             } else {
                 explanationBox.className = "rounded-2xl p-4 mb-6 border bg-rose-50/90 border-rose-200 text-rose-950";
                 explanationIcon.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-500"></i>`;
-                explanationTitle.innerText = `Jawaban Kurang Tepat. Jawaban Benar: (${["A","B","C","D"][q.correct]}) ${q.options[q.correct]}`;
+                explanationTitle.innerText = `Jawaban Kurang Tepat. Jawaban Benar: ${q.options[q.correct]}`;
             }
 
             explanationText.innerHTML = q.explanation;
@@ -749,7 +783,7 @@
             if (currentQuestionIdx < questions.length - 1) {
                 loadQuestion(currentQuestionIdx + 1);
             } else {
-                finishQuiz();
+                finishQuiz(false);
             }
         }
 
@@ -790,22 +824,6 @@
             document.getElementById("quickJumpModal").classList.add("hidden");
         }
 
-        // Keyboard Shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (document.getElementById("quizScreen").classList.contains("hidden")) return;
-
-            if (e.key === "ArrowRight") {
-                nextQuestion();
-            } else if (e.key === "ArrowLeft") {
-                prevQuestion();
-            } else if (["1", "2", "3", "4"].includes(e.key)) {
-                selectAnswer(parseInt(e.key) - 1);
-            } else if (["a", "b", "c", "d"].includes(e.key.toLowerCase())) {
-                const map = { a: 0, b: 1, c: 2, d: 3 };
-                selectAnswer(map[e.key.toLowerCase()]);
-            }
-        });
-
         /* -------------------------------------------------------------------------- */
         /* QUIZ FINISH, RESULTS & SINKRON GSHEET                                     */
         /* -------------------------------------------------------------------------- */
@@ -832,7 +850,8 @@
             });
         }
 
-        function finishQuiz() {
+        function finishQuiz(isCheated = false) {
+            isQuizActive = false;
             clearInterval(timerInterval);
 
             let correct = 0;
@@ -864,7 +883,13 @@
 
             let predikatText = "";
 
-            if (finalScoreVal >= 86) {
+            if (isCheated) {
+                predikatText = "Dibatalkan (Terdeteksi Curang 3x)";
+                badge.className = "inline-block px-5 py-2 rounded-2xl bg-rose-100 text-rose-800 font-fredoka font-bold text-lg mb-8 border border-rose-200";
+                badge.innerText = `Status: ${predikatText} 🚨`;
+                title.innerText = "Kuis Diberhentikan Otomatis!";
+                icon.className = "fa-solid fa-triangle-exclamation text-rose-500";
+            } else if (finalScoreVal >= 86) {
                 predikatText = "Sangat Baik (Istimewa)";
                 badge.className = "inline-block px-5 py-2 rounded-2xl bg-emerald-100 text-emerald-800 font-fredoka font-bold text-lg mb-8 border border-emerald-200";
                 badge.innerText = `Predikat: ${predikatText} 🌟`;
@@ -964,6 +989,8 @@
             currentQuestionIdx = 0;
             userAnswers = new Array(questions.length).fill(null);
             quizTimerSeconds = 0;
+            cheatCount = 0;
+            isQuizActive = false;
 
             document.getElementById("welcomeScreen").classList.remove("hidden");
             document.getElementById("quizScreen").classList.add("hidden");
